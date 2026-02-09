@@ -2,7 +2,7 @@ const dgram = require('dgram');
 const server = dgram.createSocket('udp4');
 let end_data = false
 let refresh = 200
-
+let is_start = false
 function handler_message(msg, rinfo){
     const headers = msg.readUInt16BE(0)
     let session = Buffer.from('9981', 'hex')
@@ -47,11 +47,21 @@ function handler_message(msg, rinfo){
             res = [res]
             if(!end_data){
                 res = [msg]
+            }else if (refresh <= 0 && is_start){
+                const shot = Buffer.from('37000ba900d4','hex')
+                if(msg.readUInt8(2)+2 > 255){
+                    shot.writeUint8(0, 3)
+                    
+                }else{
+                    shot.writeUint8(msg.readUInt8(2)+2, 3)
+                }
+                shot.writeUint8(msg.readUInt8(3), 2)
+                res.push(shot)
             }else if(refresh <= 0){
                 res.push(tick)
                 refresh = 200
             }
-            refresh = refresh - 1 
+            refresh = refresh - 1
             return [...res]
         break;
         case 0x7f00:
@@ -129,7 +139,8 @@ function client_action(msg){
                 }else{
                     respawn.writeUint8(msg.readUInt8(2)+1, 3)
                 }
-                respawn.writeUint8(msg.readUInt8(3), 2)          
+                respawn.writeUint8(msg.readUInt8(3), 2) 
+                is_start = true
                 return [respawn] 
             break;
         }
@@ -145,14 +156,43 @@ server.on('message', (msg, rinfo) => {
         for(let response of responses){
 
             server.send(response, rinfo.port, rinfo.address, (err) => {
-            if (err) {
-                console.error(`Error al enviar la respuesta: ${err.message}`);
-            } else {
-                console.log(`Respuesta enviada: ${rinfo.port}:${rinfo.address} : `, response.toString('hex'));
+                if (err) {
+                    console.error(`Error al enviar la respuesta: ${err.message}`);
+                } else {
+                    if(response.readUInt8(5) === 0x0e){
+                        /*setTimeout(()=>{
+                            console.log('send start shot')
+                            server.send(Buffer.from('37000ba900d4','hex'), rinfo.port, rinfo.address, (err) => {
+                                if (err) {
+                                    console.error(`Error al enviar la respuesta: ${err.message}`);
+                                } else {
+
+                                    console.log(`Respuesta enviada: ${rinfo.port}:${rinfo.address} : `, response.toString('hex'));
+                                    
+                                }
+                                
+                                console.log(`------FIN DEL MENSAJE------`);
+
+                            });
+                            server.send(Buffer.from('3f000ca985d8','hex'), rinfo.port, rinfo.address, (err) => {
+                                if (err) {
+                                    console.error(`Error al enviar la respuesta: ${err.message}`);
+                                } else {
+
+                                    console.log(`Respuesta enviada: ${rinfo.port}:${rinfo.address} : `, response.toString('hex'));
+                                    
+                                }
+                                
+                                console.log(`------FIN DEL MENSAJE------`);
+
+                            });
+                        }, 3000)*/
+                    }
+                    console.log(`Respuesta enviada: ${rinfo.port}:${rinfo.address} : `, response.toString('hex'));
+                    
+                }
                 
-            }
-            
-            console.log(`------FIN DEL MENSAJE------`);
+                console.log(`------FIN DEL MENSAJE------`);
 
             });
         }
@@ -174,4 +214,4 @@ server.on('error', (err) => {
 // Configuración del servidor
 
 const HOST = '0.0.0.0';
-server.bind(8888, HOST);
+server.bind(2222, HOST);
